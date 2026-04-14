@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fragmentos de un discurso amoroso | Resonancia</title>
+  </head>
+  <body class="bg-ink text-bone font-serif antialiased">
+    <main id="experience" class="relative isolate">
+      <section id="hero" class="hero-section">
+        <div class="hero-content">
+          <h1 class="hero-title">Resonancia</h1>
+          <p class="hero-author">Roland Barthes</p>
+          <p class="hero-credit">Sebastian Ibañez</p>
+        </div>
+      </section>
+
+      <section id="act1" class="act-section" data-act="1" data-audio="/audio/act1.mp3">
+        <div class="act-stage">
+          <h2 class="act-label">I — La Caja</h2>
+
+          <div class="visual-slot visual-canvas">
+            <canvas id="act1-canvas" class="spectrometer-canvas" aria-hidden="true"></canvas>
+          </div>
+
+          <div class="phrase-stack">
+            <p class="act-phrase">Si estuviéramos llenos de nosotros mismos, nada de lo que el otro hiciera nos haría vibrar.</p>
+            <p class="act-phrase">La resonancia ocurre hacia adentro. Mientras tanto, todo en el exterior marcha bien.</p>
+            <p class="act-phrase">No amamos a la persona. Amamos la imagen que construimos de ella dentro de nosotros.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="act2" class="act-section" data-act="2" data-audio="/audio/act2.mp3">
+        <div class="act-stage">
+          <h2 class="act-label">II — El Latigazo</h2>
+
+          <div class="visual-slot visual-60">
+            <video
+              id="video-soprano"
+              class="embedded-video"
+              src="/assets/soprano.mp4"
+              muted
+              loop
+              playsinline
+              preload="auto"
+              disablepictureinpicture
+              controlslist="nodownload noplaybackrate noremoteplayback"
+              aria-label="Visual de resonancia soprano"
+            ></video>
+          </div>
+
+          <div class="phrase-stack">
+            <p class="act-phrase">Una palabra llega y, según la frecuencia, resuena exactamente con los espacios de dolor que ya existían.</p>
+            <p class="act-phrase">Congelamos ese momento en una imagen. Cómo miró. Qué dijo. En qué tono lo dijo.</p>
+            <p class="act-phrase">El dolor busca ocupar todo el espacio posible. Ya no me ama. Tiene otra. Nunca me quiso.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="act3" class="act-section" data-act="3" data-audio="/audio/act3.mp3">
+        <div class="act-stage">
+          <h2 class="act-label">III — El Colapso</h2>
+
+          <div class="visual-slot visual-full">
+            <video
+              id="video-bridge"
+              class="embedded-video"
+              src="/assets/bridge.mp4"
+              muted
+              loop
+              playsinline
+              preload="auto"
+              disablepictureinpicture
+              controlslist="nodownload noplaybackrate noremoteplayback"
+              aria-label="Visual del colapso del puente"
+            ></video>
+          </div>
+
+          <div class="phrase-stack">
+            <p class="act-phrase">La memoria es un método de tortura: repetimos las imágenes hasta no poder soltar el dolor.</p>
+            <p class="act-phrase">Nada es casual. Si hoy no me miró, empiezo a tejer un hilo que llega hasta una frase que dijo hace tres meses.</p>
+            <p class="act-phrase">Todo sonido que entra en nosotros rima inevitablemente con un dolor pasado.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="act4" class="act-section" data-act="4" data-audio="/audio/act4.mp3">
+        <div class="act-stage">
+          <h2 class="act-label">IV — El Adobo</h2>
+
+          <div class="visual-slot visual-50">
+            <video
+              id="video-string"
+              class="embedded-video"
+              src="/assets/string.mp4"
+              muted
+              loop
+              playsinline
+              preload="auto"
+              disablepictureinpicture
+              controlslist="nodownload noplaybackrate noremoteplayback"
+              aria-label="Visual de resonancia de cuerda"
+            ></video>
+          </div>
+
+          <div class="phrase-stack">
+            <p class="act-phrase">La resonancia mata la novedad del otro. Lo encierra en nuestra caja para que solo emita los sonidos que ya tenemos dentro.</p>
+            <p class="act-phrase">Lo que nos destruye no suele ser algo oscuro o escondido. Es algo que brilla con demasiada intensidad.</p>
+            <p class="act-phrase">No eres un sujeto que recibe. Eres un cuerpo que es hablado por lo que oye.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="closure" class="closure-section">
+        <button id="annular-button" type="button" aria-label="Callar experiencia">CALLAR</button>
+      </section>
+    </main>
+
+    <script type="module" src="/main.js"></script>
+  </body>
+</html>
