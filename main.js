@@ -42,6 +42,7 @@ const MAX_VOLUME = 0.62;
 const INTRO_VOLUME = 0.24;
 const CLOSURE_VOLUME = 0.34;
 const RAMP_SECONDS = 0.3;
+const ENTRY_GATE_FADE_MS = 280;
 const SPECTROGRAM_MIN_FREQ = 60;
 const SPECTROGRAM_LABELS = [100, 1000, 5000];
 
@@ -94,7 +95,7 @@ const closeEntryGate = () => {
   document.body.classList.remove("gate-open");
   window.setTimeout(() => {
     entryGate.remove();
-  }, 300);
+  }, ENTRY_GATE_FADE_MS);
 };
 
 const startExperience = () => {
