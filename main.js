@@ -48,6 +48,8 @@ const SPECTROGRAM_LABELS = [100, 1000, 5000];
 const actSections = Array.from(document.querySelectorAll(".act-section"));
 const closureButton = document.getElementById("annular-button");
 const closureSection = document.getElementById("closure");
+const entryGate = document.getElementById("entry-gate");
+const entryButton = document.getElementById("entry-button");
 
 const closureAudio = new Audio("/audio/act4.mp3");
 closureAudio.loop = true;
@@ -64,6 +66,7 @@ let closurePauseCall = null;
 let destroyAct1Spectrogram = null;
 let resumeAct1Spectrogram = null;
 let userGestureReceived = false;
+let experienceStarted = !entryGate;
 const unlockedAudios = new Set();
 
 const setClosureVolume = gsap.quickTo(closureAudio, "volume", {
@@ -82,8 +85,30 @@ const unlockEvents = [
   "wheel"
 ];
 
+const closeEntryGate = () => {
+  if (!entryGate) {
+    return;
+  }
+
+  entryGate.classList.add("is-hidden");
+  document.body.classList.remove("gate-open");
+  window.setTimeout(() => {
+    entryGate.remove();
+  }, 300);
+};
+
+const startExperience = () => {
+  if (experienceStarted) {
+    return;
+  }
+
+  experienceStarted = true;
+  closeEntryGate();
+};
+
 const handleUnlockGesture = () => {
   void unlockAudio(true);
+  startExperience();
 };
 
 const videoByAct = {
@@ -343,9 +368,17 @@ async function unlockAudio(fromGesture = false) {
   unlockInProgress = false;
 }
 
+if (entryGate) {
+  document.body.classList.add("gate-open");
+}
+
 unlockEvents.forEach((eventName) => {
   window.addEventListener(eventName, handleUnlockGesture, { passive: true });
 });
+
+if (entryButton) {
+  entryButton.addEventListener("click", handleUnlockGesture);
+}
 
 window.addEventListener(
   "scroll",
