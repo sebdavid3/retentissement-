@@ -181,7 +181,7 @@ function activateVideo(video) {
     return;
   }
 
-  if (video.readyState === HTMLMediaElement.HAVE_NOTHING) {
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     video.load();
   }
 
