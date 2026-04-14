@@ -181,6 +181,10 @@ function activateVideo(video) {
     return;
   }
 
+  if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+    video.load();
+  }
+
   video.muted = true;
   safePlay(video);
 }
@@ -322,6 +326,7 @@ async function unlockAudio(fromGesture = false) {
     if (state.active && !state.deactivating && unlockedAudios.has(state.audio)) {
       state.audio.muted = false;
       safePlay(state.audio);
+      activateVideo(state.video);
       state.setVolume(targetVolume(state, state.progress));
       return;
     }
