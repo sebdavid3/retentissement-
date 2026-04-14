@@ -197,9 +197,30 @@ function safePlay(media) {
   const playPromise = media.play();
   if (playPromise && typeof playPromise.catch === "function") {
     playPromise.catch(() => {
-      // Ignore blocked autoplay; media will retry after user gesture.
+      const retry = () => {
+        media.removeEventListener("canplay", retry);
+        media.removeEventListener("loadeddata", retry);
+        media.play().catch(() => {
+          // Ignore repeated failures; the next gesture or scroll pass will retry.
+        });
+      };
+
+      media.addEventListener("canplay", retry, { once: true });
+      media.addEventListener("loadeddata", retry, { once: true });
     });
   }
+}
+
+function prepareVideoPlayback(video) {
+  if (!video) {
+    return;
+  }
+
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "true");
 }
 
 function activateVideo(video) {
@@ -207,11 +228,12 @@ function activateVideo(video) {
     return;
   }
 
+  prepareVideoPlayback(video);
+
   if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
     video.load();
   }
 
-  video.muted = true;
   safePlay(video);
 }
 
@@ -326,8 +348,39 @@ async function unlockAudio(fromGesture = false) {
 
   unlockInProgress = true;
 
+  if (fromGesture) {
+    actStates.forEach((state) => {
+      if (!state.active) {
+        return;
+      }
+
+      state.audio.muted = true;
+      state.audio.volume = 0;
+      state.audio.play().catch(() => {
+        // Reintentaremos con el resto del desbloqueo y en la siguiente interacción.
+      });
+
+      if (state.video) {
+        prepareVideoPlayback(state.video);
+        state.video.play().catch(() => {
+          // Same fallback as audio; the browser may need the media to be ready.
+        });
+      }
+    });
+
+    closureAudio.muted = true;
+    closureAudio.volume = 0;
+    closureAudio.play().catch(() => {
+      // Keep the closure track primed without changing current behavior.
+    });
+  }
+
   if (resumeAct1Spectrogram) {
-    await resumeAct1Spectrogram();
+    const resumePromise = resumeAct1Spectrogram();
+
+    if (!fromGesture) {
+      await resumePromise;
+    }
   }
 
   const unlockTargets = [...actStates.map((state) => state.audio), closureAudio];
@@ -845,6 +898,7 @@ function initReferencesRipple(section) {
   const MOVE_DISTANCE_THRESHOLD = 18;
   const MOVE_TIME_THRESHOLD = 56;
   const MAX_ACTIVE_RINGS = 22;
+  const BASE_WAVE_DURATION = 1.75;
 
   let sectionWidth = 1;
   let sectionHeight = 1;
@@ -865,36 +919,49 @@ function initReferencesRipple(section) {
       return;
     }
 
-    const ring = document.createElement("span");
     const factor = clamp(strength, 0.65, 1.45);
-    const size = Math.round(180 + factor * 180);
-    ring.className = "references-ripple-ring";
-    ring.style.width = `${size}px`;
-    ring.style.height = `${size}px`;
-    ring.style.left = `${x}px`;
-    ring.style.top = `${y}px`;
-    rippleLayer.appendChild(ring);
-    activeRings += 1;
+    const baseSize = Math.round(170 + factor * 190);
+    const ringCount = 3;
 
-    gsap.fromTo(
-      ring,
-      {
-        opacity: 0.78,
-        scale: 0.12,
-        xPercent: -50,
-        yPercent: -50
-      },
-      {
-        opacity: 0,
-        scale: 1.2,
-        duration: 1.3,
-        ease: "power2.out",
-        onComplete: () => {
-          activeRings = Math.max(0, activeRings - 1);
-          ring.remove();
-        }
+    for (let index = 0; index < ringCount; index += 1) {
+      if (activeRings >= MAX_ACTIVE_RINGS) {
+        break;
       }
-    );
+
+      const ring = document.createElement("span");
+      const size = baseSize + index * 74;
+      const delay = index * 0.1;
+      const wobble = index === 1 ? 0.03 : index === 2 ? -0.02 : 0;
+
+      ring.className = `references-ripple-ring references-ripple-ring--${index + 1}`;
+      ring.style.width = `${size}px`;
+      ring.style.height = `${size}px`;
+      ring.style.left = `${x}px`;
+      ring.style.top = `${y}px`;
+      rippleLayer.appendChild(ring);
+      activeRings += 1;
+
+      gsap.fromTo(
+        ring,
+        {
+          opacity: index === 0 ? 0.7 : 0.45,
+          scale: 0.08,
+          xPercent: -50,
+          yPercent: -50
+        },
+        {
+          opacity: 0,
+          scale: 1.08 + wobble,
+          duration: BASE_WAVE_DURATION + index * 0.16,
+          delay,
+          ease: index === 2 ? "power1.out" : "power2.out",
+          onComplete: () => {
+            activeRings = Math.max(0, activeRings - 1);
+            ring.remove();
+          }
+        }
+      );
+    }
   };
 
   const emitAtEventPoint = (event, strength) => {
@@ -959,14 +1026,14 @@ function initReferencesRipple(section) {
       const distance = Math.hypot(point.x - lastMoveX, point.y - lastMoveY);
       const elapsed = now - lastMoveStamp;
 
-      if (distance < MOVE_DISTANCE_THRESHOLD && elapsed < MOVE_TIME_THRESHOLD) {
+      if (distance < MOVE_DISTANCE_THRESHOLD * 1.25 && elapsed < MOVE_TIME_THRESHOLD) {
         return;
       }
 
       lastMoveX = point.x;
       lastMoveY = point.y;
       lastMoveStamp = now;
-      spawnRing(point.x, point.y, 0.82);
+      spawnRing(point.x, point.y, clamp(0.72 + distance / 180, 0.72, 1.16));
     },
     { passive: true }
   );
@@ -992,8 +1059,8 @@ function initReferencesRipple(section) {
       return;
     }
 
-    spawnRing(sectionWidth * 0.5, sectionHeight * 0.2, 0.72);
-  }, 2400);
+    spawnRing(sectionWidth * 0.5, sectionHeight * 0.2, 0.88);
+  }, 3600);
 
   refreshBounds();
   if (typeof ResizeObserver !== "undefined") {
