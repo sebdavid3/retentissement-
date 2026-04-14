@@ -4,11 +4,11 @@ Una experiencia web performática construida alrededor de **"Fragmentos de un di
 
 ## Características
 
-- 🎧 **Experiencia de audio inmersiva**: Cuatro actos narrativos, impulsados por la API de Web Audio.
-- 📉 **Espectrograma en tiempo real**: Renderizado dinámico de la frecuencia del Acto I directamente en `<canvas>`.
-- 🕹️ **Coreografía de Scroll**: Animaciones vinculadas al nivel de desplazamiento del usuario e interpolación de volumen de audio de transición cruzada (ScrollTrigger de GSAP).
-- 📜 **Estética Brutalista**: Colores puros, tipografía serif robusta y sin distracciones visuales ni botones ("Silencio visual").
-- ⚡ **Desarrollado con Vite & Vanilla JS**: Sin frameworks que intervengan entre el audio puro y el usuario.
+- **Experiencia de audio inmersiva**: Cuatro actos narrativos, impulsados por la API de Web Audio.
+- **Espectrograma en tiempo real**: Renderizado dinámico de la frecuencia del Acto I directamente en `<canvas>`.
+- **Coreografía de Scroll**: Animaciones vinculadas al nivel de desplazamiento del usuario e interpolación de volumen de audio de transición cruzada (ScrollTrigger de GSAP).
+- **Estética Brutalista**: Colores puros, tipografía serif robusta y sin distracciones visuales ni botones ("Silencio visual").
+- **Desarrollado con Vite & Vanilla JS**: Sin frameworks que intervengan entre el audio puro y el usuario.
 
 ## Tecnologías Utilizadas
 

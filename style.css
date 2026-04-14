@@ -337,9 +337,54 @@ body.annihilation-transition::before {
 }
 
 .references-section {
+  position: relative;
+  --refs-blend-opacity: 0;
+  --refs-blend-shift: -36px;
   background: var(--ink);
-  border-top: 1px solid var(--blood);
   padding: clamp(2.5rem, 6vw, 5rem) clamp(1.5rem, 4vw, 4rem);
+}
+
+.references-section::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -180px;
+  height: 180px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--refs-blend-opacity);
+  transform: translateY(var(--refs-blend-shift));
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(241, 236, 227, 1) 28%,
+    rgba(194, 186, 173, 1) 55%,
+    rgba(93, 87, 81, 1) 80%,
+    rgba(10, 10, 10, 1) 100%
+  );
+}
+
+.references-ripple-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.references-ripple-ring {
+  position: absolute;
+  border-radius: 999px;
+  border: 2px solid rgba(243, 236, 222, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(139, 0, 0, 0.65) inset,
+    0 0 16px rgba(243, 236, 222, 0.42);
+}
+
+.references-section > *:not(.references-ripple-layer) {
+  position: relative;
+  z-index: 2;
 }
 
 .references-heading {

@@ -146,7 +146,7 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
-function volumeFromProgress(progress) {
+function volumeFromProgress(progress, keepTailVolume = false) {
   const p = clamp(progress, 0, 1);
 
   if (p <= 0) {
@@ -157,7 +157,7 @@ function volumeFromProgress(progress) {
     return (p / 0.2) * MAX_VOLUME;
   }
 
-  if (p <= 0.8) {
+  if (p <= 0.8 || keepTailVolume) {
     return MAX_VOLUME;
   }
 
@@ -180,7 +180,7 @@ function sectionProgress(section) {
 }
 
 function targetVolume(state, progress) {
-  const base = volumeFromProgress(progress);
+  const base = volumeFromProgress(progress, state.act === 4);
 
   if (state.act === 1 && !hasUserScrolled && !annihilated) {
     return Math.max(base, INTRO_VOLUME);
@@ -251,6 +251,21 @@ function activateAct(state) {
 
 function deactivateAct(state) {
   if (state.deactivating || annihilated) {
+    return;
+  }
+
+  if (state.pauseCall) {
+    state.pauseCall.kill();
+    state.pauseCall = null;
+  }
+
+  if (state.act === 4) {
+    deactivateVideo(state.video);
+    state.audio.volume = 0;
+    state.audio.pause();
+    state.audio.muted = true;
+    state.active = false;
+    state.deactivating = false;
     return;
   }
 
@@ -438,7 +453,9 @@ actStates.forEach((state) => {
       activateAct(state);
     },
     onLeave: () => {
-      deactivateAct(state);
+      if (state.act !== 4) {
+        deactivateAct(state);
+      }
     },
     onLeaveBack: () => {
       deactivateAct(state);
@@ -476,47 +493,8 @@ function primeInitialAct() {
 }
 
 function setClosureAmbience(enabled) {
-  if (annihilated) {
-    return;
-  }
-
-  if (enabled && !unlockedAudios.has(closureAudio)) {
-    void unlockAudio();
-  }
-
-  if (!audioUnlocked || !unlockedAudios.has(closureAudio)) {
-    return;
-  }
-
-  if (closurePauseCall) {
-    closurePauseCall.kill();
-    closurePauseCall = null;
-  }
-
-  if (enabled) {
-    const act4 = actStates.find((state) => state.act === 4);
-    if (act4 && act4.active) {
-      deactivateAct(act4);
-    }
-
-    closureAudio.muted = false;
-    if (closureAudio.paused) {
-      closureAudio.currentTime = 0;
-    }
-
-    safePlay(closureAudio);
-    setClosureVolume(Math.min(MAX_VOLUME, CLOSURE_VOLUME));
-    return;
-  }
-
-  setClosureVolume(0);
-  closurePauseCall = gsap.delayedCall(RAMP_SECONDS, () => {
-    closureAudio.volume = 0;
-    closureAudio.pause();
-    closureAudio.currentTime = 0;
-    closureAudio.muted = true;
-    closurePauseCall = null;
-  });
+  // Keep Act IV audio continuous into CALLAR. No separate ambience layer.
+  return;
 }
 
 if (closureSection) {
@@ -854,6 +832,178 @@ if (heroContent && act1El) {
   .fromTo(act1El, { opacity: 0 }, { opacity: 1, ease: "none" }, 0.5);
 }
 
+function initReferencesRipple(section) {
+  if (!section) {
+    return;
+  }
+
+  const rippleLayer = section.querySelector(".references-ripple-layer");
+  if (!rippleLayer) {
+    return;
+  }
+
+  const MOVE_DISTANCE_THRESHOLD = 18;
+  const MOVE_TIME_THRESHOLD = 56;
+  const MAX_ACTIVE_RINGS = 22;
+
+  let sectionWidth = 1;
+  let sectionHeight = 1;
+  let activeRings = 0;
+  let lastMoveStamp = 0;
+  let lastMoveX = 0;
+  let lastMoveY = 0;
+  let hasLastMove = false;
+
+  const refreshBounds = () => {
+    const rect = section.getBoundingClientRect();
+    sectionWidth = Math.max(1, Math.round(rect.width));
+    sectionHeight = Math.max(1, Math.round(rect.height));
+  };
+
+  const spawnRing = (x, y, strength = 1) => {
+    if (activeRings >= MAX_ACTIVE_RINGS) {
+      return;
+    }
+
+    const ring = document.createElement("span");
+    const factor = clamp(strength, 0.65, 1.45);
+    const size = Math.round(180 + factor * 180);
+    ring.className = "references-ripple-ring";
+    ring.style.width = `${size}px`;
+    ring.style.height = `${size}px`;
+    ring.style.left = `${x}px`;
+    ring.style.top = `${y}px`;
+    rippleLayer.appendChild(ring);
+    activeRings += 1;
+
+    gsap.fromTo(
+      ring,
+      {
+        opacity: 0.78,
+        scale: 0.12,
+        xPercent: -50,
+        yPercent: -50
+      },
+      {
+        opacity: 0,
+        scale: 1.2,
+        duration: 1.3,
+        ease: "power2.out",
+        onComplete: () => {
+          activeRings = Math.max(0, activeRings - 1);
+          ring.remove();
+        }
+      }
+    );
+  };
+
+  const emitAtEventPoint = (event, strength) => {
+    const point = pointFromEvent(event);
+    spawnRing(point.x, point.y, strength);
+  };
+
+  const pointFromEvent = (event) => {
+    const rect = section.getBoundingClientRect();
+
+    if (event.touches && event.touches[0]) {
+      return {
+        x: event.touches[0].clientX - rect.left,
+        y: event.touches[0].clientY - rect.top
+      };
+    }
+
+    if (event.changedTouches && event.changedTouches[0]) {
+      return {
+        x: event.changedTouches[0].clientX - rect.left,
+        y: event.changedTouches[0].clientY - rect.top
+      };
+    }
+
+    return {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top
+    };
+  };
+
+  section.addEventListener(
+    "pointerenter",
+    (event) => {
+      emitAtEventPoint(event, 1.25);
+    },
+    { passive: true }
+  );
+
+  section.addEventListener(
+    "pointerdown",
+    (event) => {
+      emitAtEventPoint(event, 1.35);
+    },
+    { passive: true }
+  );
+
+  section.addEventListener(
+    "pointermove",
+    (event) => {
+      const now = performance.now();
+      const point = pointFromEvent(event);
+
+      if (!hasLastMove) {
+        hasLastMove = true;
+        lastMoveX = point.x;
+        lastMoveY = point.y;
+        lastMoveStamp = now;
+        spawnRing(point.x, point.y, 0.82);
+        return;
+      }
+
+      const distance = Math.hypot(point.x - lastMoveX, point.y - lastMoveY);
+      const elapsed = now - lastMoveStamp;
+
+      if (distance < MOVE_DISTANCE_THRESHOLD && elapsed < MOVE_TIME_THRESHOLD) {
+        return;
+      }
+
+      lastMoveX = point.x;
+      lastMoveY = point.y;
+      lastMoveStamp = now;
+      spawnRing(point.x, point.y, 0.82);
+    },
+    { passive: true }
+  );
+
+  section.addEventListener(
+    "touchstart",
+    (event) => {
+      emitAtEventPoint(event, 1.15);
+    },
+    { passive: true }
+  );
+
+  section.addEventListener(
+    "touchmove",
+    (event) => {
+      emitAtEventPoint(event, 0.86);
+    },
+    { passive: true }
+  );
+
+  window.setInterval(() => {
+    if (document.hidden || sectionWidth < 2 || sectionHeight < 2) {
+      return;
+    }
+
+    spawnRing(sectionWidth * 0.5, sectionHeight * 0.2, 0.72);
+  }, 2400);
+
+  refreshBounds();
+  if (typeof ResizeObserver !== "undefined") {
+    const observer = new ResizeObserver(refreshBounds);
+    observer.observe(section);
+  } else {
+    window.addEventListener("resize", refreshBounds, { passive: true });
+  }
+}
+
 function renderFinalState() {
   if (destroyAct1Spectrogram) {
     destroyAct1Spectrogram();
@@ -872,67 +1022,68 @@ function renderFinalState() {
       <p class="terminal-quote"> En mí, es la oreja la que habla.</p>
     </main>
     <section id="referencias" class="references-section">
+      <div class="references-ripple-layer" aria-hidden="true"></div>
       <h2 class="references-heading">Referencias</h2>
       <div class="references-list">
         <article class="ref-entry">
           <h3 class="ref-name">Barthes, Roland. Fragmentos de un discurso amoroso</h3>
-          <p class="ref-text">Es el centro de todo; una radiografía del cuerpo que ama. Trata el discurso amoroso como un fenómeno físico: algo que golpea, vibra y deja una huella biológica en el sujeto.</p>
-          <p class="ref-context">Barthes, Roland (1915-1980): Su obra Fragmentos de un discurso amoroso, publicada en 1977 por Éditions du Seuil, marcó un hito en la crítica literaria al vender más de 60,000 ejemplares en sus primeros meses. Este giro hacia lo "intratable" del sentimiento ocurrió tras la muerte de su madre, Henriette Barthes, en octubre de 1977, evento que lo alejó del estructuralismo científico para explorar una escritura del afecto y el duelo.</p>
+          <p class="ref-text">Es el centro de todo. Barthes no escribe sobre el amor desde afuera, como si lo estuviera diseccionando en un laboratorio. Lo escribe desde adentro, desde el cuerpo del que ama y sufre. Trata el discurso amoroso como un fenómeno físico, algo que golpea, que vibra, que deja una marca biológica en el sujeto. No es un libro sobre el amor. Es una radiografía del cuerpo cuando ama.</p>
+          <p class="ref-context">Roland Barthes (1915-1980) fue un crítico literario y semiólogo francés. Publicó Fragmentos en 1977, justo después de la muerte de su madre, y se convirtió en un fenómeno editorial inesperado: vendió más de 60.000 ejemplares en sus primeros meses. Marcó un giro en su obra, del estructuralismo científico hacia una escritura del afecto y el duelo.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Nietzsche, Friedrich. La genealogía de la moral</h3>
-          <p class="ref-text">Describe al sujeto que no puede "digerir" las experiencias y cuya memoria se vuelve resentimiento. Aquí, el dolor se convierte en una forma de fidelidad que se niega al olvido.</p>
-          <p class="ref-context">Nietzsche, Friedrich (1844-1900): La influencia del filósofo alemán fue central en la etapa tardía de Barthes, especialmente tras el auge del "nuevo nietzscheanismo" francés de los años 60. Barthes adoptó la noción de la "voluntad de poder" no como dominio, sino como una energía vital que el cuerpo expresa al hablar. En su curso en el Collège de France (1977-1978), Barthes cita a Nietzsche como la herramienta para desarticular la "Doxa" o el sentido común.</p>
+          <p class="ref-text">Nietzsche describe al sujeto que no puede digerir las experiencias. Su alma es como un estómago que no funciona: todo se queda adentro, pudriéndose. Barthes lo usa para hablar de la memoria como arma, como método de tortura. Lo que me quedó a mí es algo más simple: el dolor se vuelve una forma de fidelidad. No olvidamos porque, de alguna manera, soltar el dolor sería también soltar al otro.</p>
+          <p class="ref-context">Friedrich Nietzsche (1844-1900) fue un filósofo alemán que cuestionó los fundamentos de la moral occidental. En La genealogía de la moral (1887) analiza el resentimiento como la psicología del que no puede olvidar ni actuar, y convierte su impotencia en juicio moral. Barthes lo usa no para hablar de moral, sino de amor: el amante es el resentido por excelencia.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Lacan, Jacques</h3>
-          <p class="ref-text">De él viene el "Imaginario", el lugar donde amamos una imagen construida y perfecta del otro. El conflicto estalla cuando la persona real aparece y hace crujir nuestra caja de resonancia mental.</p>
-          <p class="ref-context">Lacan, Jacques (1901-1981): Durante la década de los 70, Barthes fue un asistente regular a los Seminarios de Lacan en la Escuela Freudiana de París. Utilizó conceptos fundamentales de los Escritos (1966), específicamente el "Estadio del Espejo" y la distinción entre lo Imaginario y lo Real, para diseccionar cómo el sujeto enamorado construye una imagen idealizada que inevitablemente colisiona con la realidad del otro.</p>
+          <p class="ref-text">De Lacan viene el Imaginario: ese lugar donde construimos una imagen perfecta y cerrada del otro que no tiene nada que ver con quien realmente es. El problema es que amamos esa imagen, no a la persona. El estruendo de la resonancia no ocurre afuera, ocurre en tu cine privado, mientras que afuera el otro solo dijo una frase trivial.</p>
+          <p class="ref-context">Jacques Lacan (1901-1981) fue un psicoanalista francés que reformuló el psicoanálisis de Freud desde la lingüística. Su concepto del Imaginario describe el registro donde el sujeto busca totalidad e identificación. Barthes asistía a sus seminarios en París en los años 70 y tomó de él la idea de que el amor no es un encuentro entre dos personas, sino entre dos imágenes.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Saussure, Ferdinand de. Curso de lingüística general</h3>
-          <p class="ref-text">Representa la lingüística que Barthes rechaza por ser una escucha "plana" del diccionario. Sirve de contraste para demostrar que el amor opera en una frecuencia de fuerzas, no de sistemas.</p>
-          <p class="ref-context">Saussure, Ferdinand de (1857-1913): Aunque el Curso de lingüística general (1916) fue la base del Barthes estructuralista de los años 50 y 60, su obra de 1977 representa una ruptura con esta herencia. Barthes transita de la semiología del significado a una "semiología de la pulsión", donde el significante ya no sirve para comunicar conceptos, sino para producir placer sensorial.</p>
+          <p class="ref-text">Saussure estudia el lenguaje como sistema: qué significa cada palabra en el diccionario. Es una escucha plana. El amante no escucha lo que dijiste. Escucha el tono, el peso, la intención oculta. Saussure es el punto de partida que Barthes necesita para mostrar que el amor opera en otra frecuencia completamente distinta.</p>
+          <p class="ref-context">Ferdinand de Saussure (1857-1913) fue un lingüista suizo considerado el fundador de la lingüística moderna. Su Curso de lingüística general (1916) estableció que el lenguaje es un sistema de signos donde lo que importa es la diferencia entre ellos, no su relación con el mundo real. Barthes partió de ahí en su juventud, pero en 1977 ya le interesaba lo que Saussure no podía explicar: la fuerza física de las palabras en el cuerpo.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Retentissement y Ressentiment — el francés como evidencia</h3>
-          <p class="ref-text">Juego lingüístico donde la resonancia física rima con el resentimiento temporal. En francés, el idioma ya sabe que vibrar por un golpe actual es, en realidad, volver a sentir un dolor antiguo.</p>
-          <p class="ref-context">Barthes, formado en filología clásica, utiliza estos términos para explicar la fenomenología del lenguaje. Mientras que el ressentiment fue analizado por Nietzsche en La genealogía de la moral (1887) como una fuerza reactiva, Barthes propone el retentissement como una categoría estética para describir el eco psicológico que las palabras dejan en el cuerpo.</p>
+          <p class="ref-text">En francés, resonancia se dice retentissement y resentimiento se dice ressentiment. Suenan casi igual y no es casualidad. El retentissement es el aspecto físico: el impacto de la onda en la caja de madera, el latigazo en el cuerpo. El ressentiment es el aspecto temporal: volver a sentir una y otra vez. En español perdemos esa cercanía sonora. En francés, el idioma ya sabe que vibrar por un golpe actual es, en realidad, volver a sentir un dolor antiguo.</p>
+          <p class="ref-context">Barthes fue formado en filología clásica y era profundamente sensible al peso físico de las palabras. Esta proximidad entre retentissement y ressentiment no es un juego de palabras sino una tesis: que la resonancia amorosa y el resentimiento nietzscheano son el mismo fenómeno visto desde dos ángulos, uno acústico y otro temporal.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Diderot, Denis</h3>
-          <p class="ref-text">Aporta la idea del cuerpo como teatro donde las emociones —palidez, sudor, temblor— son imposibles de ocultar. El cuerpo amoroso es un testigo que delata la verdad que la mente intenta controlar.</p>
-          <p class="ref-context">Diderot, Denis (1713-1784): Barthes recuperó la estética de la Ilustración, citando frecuentemente el Paradoja sobre el comediante (escrito entre 1773 y 1778). El interés de Barthes radicaba en la técnica de la "escena" y el "cuadro" que Diderot propuso para el teatro, aplicándola al análisis de cómo el amante teatraliza su propio sufrimiento mediante gestos físicos codificados.</p>
+          <p class="ref-text">Diderot estaba obsesionado con cómo las emociones se manifiestan en el cuerpo: el temblor, la palidez, el sudor. Para él, el cuerpo es un teatro donde todo lo que sentimos se vuelve visible aunque la mente intente controlarlo. Barthes lo usa para decir que el cuerpo amoroso es un testigo que delata. Lo que nos destruye no suele ser algo oscuro. Es algo que brilla con demasiada intensidad, una verdad que se nos revela de golpe y nos ciega.</p>
+          <p class="ref-context">Denis Diderot (1713-1784) fue un filósofo y escritor francés, figura central de la Ilustración y director de la Enciclopedia. En su Paradoja sobre el comediante analizó cómo el actor debe distanciarse de la emoción para representarla con verdad. Barthes invierte esa paradoja: el amante no puede distanciarse. Su cuerpo actúa solo, sin permiso.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Flaubert, Gustave</h3>
-          <p class="ref-text">Representa el estado de "adobo": rendirse a la tempestad interior desde la horizontalidad del diván. Es el gesto honesto de dejar que el dolor ocupe todo el espacio hasta que se amortigüe solo.</p>
-          <p class="ref-context">Flaubert, Gustave (1821-1880): Considerado por Barthes como el precursor de la modernidad literaria, su relación se intensificó en los ensayos de los años 70. Barthes analizaba la correspondencia de Flaubert para entender la "agonía del estilo" y la búsqueda de la mot juste (palabra exacta). Veía en las crisis creativas del autor de Madame Bovary una forma de resistencia ética frente a la banalización del lenguaje.</p>
+          <p class="ref-text">Flaubert podía pasar un día entero buscando una sola palabra exacta y luego caía agotado en su diván. Barthes toma esa imagen y la traslada al amor: el amante busca la señal perfecta del otro y cuando no la encuentra, o cuando la encuentra y duele, cae en el mismo agotamiento. A eso Barthes lo llama el adobo. No es debilidad. Es el gesto honesto de tenderse, dejar que la tempestad interior ocurra, y esperar a que se amortigüe sola.</p>
+          <p class="ref-context">Gustave Flaubert (1821-1880) fue un novelista francés considerado el padre del realismo literario. Era famoso por su agonía ante el lenguaje: buscaba la mot juste, la palabra exacta, con una obsesión casi enfermiza. Barthes veía en esa agonía creativa un espejo del amante: ambos buscan la forma perfecta de algo que el lenguaje no puede contener del todo.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">La cama y la mesa — Barthes</h3>
-          <p class="ref-text">Divide el espacio entre lo Imaginario (la parálisis horizontal que alimenta el dolor) y la Realidad (el gesto vertical de levantarse). Es la geografía clínica de cómo el cuerpo entra o sale del sufrimiento.</p>
-          <p class="ref-context">Estas referencias aluden al entorno doméstico de Barthes en su apartamento de la Rue Servandoni en París. Históricamente, su rutina de escritura estaba estrictamente dividida entre la horizontalidad de la lectura y la verticalidad de la máquina de escribir, una dicotomía que él conceptualizó como la lucha entre el abandono emocional y la disciplina intelectual.</p>
+          <p class="ref-text">Barthes divide el espacio doméstico en dos zonas. La cama es el lugar de lo Imaginario: cuando estás horizontal, el cuerpo no tiene que hacer nada, entonces toda la energía se va a alimentar la imagen del otro. La mesa es la realidad: levantarte e ir a ella, aunque no hagas nada todavía, es suficiente para que la resonancia empiece a ceder. No es un consejo. Es una observación casi clínica de cómo el cuerpo y el espacio se conspiran para mantenerte dentro o fuera del dolor.</p>
+          <p class="ref-context">Esta dicotomía refleja la rutina real de Barthes en su apartamento de París, donde separaba estrictamente el tiempo de lectura horizontal del tiempo de escritura vertical. Lo que comenzó como una disciplina de trabajo se convirtió en una categoría filosófica: el espacio no es neutro, el cuerpo piensa diferente según su postura.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">El monje zen — figura citada por Barthes</h3>
-          <p class="ref-text">Es la antítesis del amante; mientras el monje busca el vacío para hallar la calma, el amante busca la saturación. En el colapso, el amante no busca la paz, sino habitar el amargor de sus imágenes.</p>
-          <p class="ref-context">Tras tres viajes a Japón en 1966, Barthes publicó El imperio de los signos (1970). Allí contrapone la saturación de sentido de Occidente con la vacuidad del Zen. La figura del monje representa para él un ideal de desapego lingüístico, donde el sujeto puede finalmente "vaciar" el discurso amoroso de su carga trágica y analítica.</p>
+          <p class="ref-text">El monje busca el vacío, vaciarse de imágenes para alcanzar la calma. El amante hace exactamente lo opuesto: es un acumulador compulsivo de imágenes. En el colapso del Acto IV, el amante no busca la paz. Se queda en el lecho y deja que el amargor lo ocupe todo. No hay salida zen. Solo el adobo.</p>
+          <p class="ref-context">Barthes viajó a Japón en varias ocasiones durante los años 60 y publicó El imperio de los signos en 1970, donde exploró la cultura japonesa como un sistema de sentido radicalmente distinto al occidental. El zen lo fascinaba precisamente porque proponía lo que él no podía hacer: desapegarse del lenguaje y de las imágenes.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Ruysbroeck, Jan van</h3>
-          <p class="ref-text">Un místico que buscaba vaciarse de imágenes, justo lo opuesto al amante. Nosotros buscamos llenarnos compulsivamente con la imagen del otro, convirtiendo el amor en una religión de la asfixia.</p>
-          <p class="ref-context">Ruysbroeck, Jan van (1293-1381): La mención de este místico flamenco del siglo XIV permite a Barthes conectar la retórica amorosa contemporánea con la tradición de la devotio moderna. Utiliza textos como El ornamento de las bodas espirituales para contrastar la "noche oscura" del alma mística con la "noche" del amante abandonado, estableciendo una genealogía del deseo que trasciende lo secular.</p>
+          <p class="ref-text">Un místico flamenco del siglo XIV que buscaba sumergirse en Dios vaciándose de imágenes. Barthes lo pone como el opuesto exacto del amante: nosotros no queremos vaciarnos, queremos llenarnos con la imagen del otro aunque eso nos asfixie. Para Barthes, el dios del amante es su propia obsesión. Y como toda religión, tiene sus ritos, su lecho, su tempestad y su silencio final.</p>
+          <p class="ref-context">Jan van Ruysbroeck (1293-1381) fue un místico flamenco cuya obra más conocida, El ornamento de las bodas espirituales, describe la unión del alma con Dios a través del vaciamiento de sí mismo. Barthes usa esta tradición mística para mostrar que el amor romántico tiene la misma estructura que la experiencia religiosa, pero invertida: en lugar de vaciarse, el amante se llena hasta el colapso.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Deleuze, Gilles. Nietzsche y la filosofía</h3>
-          <p class="ref-text">Sostiene que no hay hechos, solo interpretaciones de fuerzas. Explica por qué el amante no escucha palabras, sino el peso, el tono y la intención oculta tras el lenguaje.</p>
-          <p class="ref-context">Deleuze, Gilles (1925-1995): La relación intelectual entre ambos se consolidó tras la publicación de Nietzsche y la filosofía (1962). Barthes tomó de Deleuze la idea del "sujeto nómada" y la multiplicidad de fuerzas. En el contexto del París post-1968, esta visión permitió a Barthes tratar el discurso del amante no como una unidad psíquica, sino como un flujo de intensidades y afectos en constante mutación.</p>
+          <p class="ref-text">Deleuze sostiene que no hay hechos, solo interpretaciones de fuerzas. El amante no escucha lo que el otro dice, escucha la fuerza que hay detrás: el tono, la intención, el peso invisible de cada gesto. Nada es casual. Si hoy no me miró, empiezo a tejer un hilo que llega hasta una frase que dijo hace tres meses. Eso es leer fuerzas, no palabras. El amante es, por desgracia, un experto en eso.</p>
+          <p class="ref-context">Gilles Deleuze (1925-1995) fue un filósofo francés cuya lectura de Nietzsche en los años 60 renovó el pensamiento francés contemporáneo. Su idea central es que el mundo no está hecho de hechos sino de fuerzas en tensión. Barthes tomó eso y lo aplicó al lenguaje amoroso: cada palabra del otro es una fuerza, no un mensaje.</p>
         </article>
         <article class="ref-entry">
           <h3 class="ref-name">Freud, Sigmund — La huella mnémica y la atención flotante</h3>
-          <p class="ref-text">Aporta la "huella mnémica" (marcas que se reactivan) y la falta de "atención flotante". El amante vive la tragedia de una lucidez total: escucha sin filtro, sin ruido y con todo el cuerpo.</p>
-          <p class="ref-context">Freud, Sigmund (1856-1939): Barthes utiliza el aparato teórico del psicoanálisis, particularmente conceptos de Más allá del principio de placer (1920), para explicar la naturaleza repetitiva y compulsiva del amor. Sitúa el discurso amoroso en el ámbito de la neurosis de transferencia, donde el amado es un soporte para figuras parentales y traumas no resueltos de la infancia.</p>
+          <p class="ref-text">Freud aparece en dos momentos. Primero con la huella mnémica: cada experiencia deja una marca en el cuerpo que puede reactivarse con cualquier estímulo parecido. Por eso todo sonido que entra en nosotros rima inevitablemente con un dolor pasado. Segundo con la atención flotante: el analista escucha sin juzgar, dejando pasar las palabras. El amante hace exactamente lo contrario. Escucha con todo el cuerpo, sin filtro, sin ruido. Mientras el otro habla, el amante está condenado a una lucidez total.</p>
+          <p class="ref-context">Sigmund Freud (1856-1939) fue el fundador del psicoanálisis. La huella mnémica aparece en sus primeros textos como la idea de que toda experiencia deja una inscripción en el aparato psíquico que puede reactivarse. La atención flotante es la técnica del analista: escuchar sin privilegiar ninguna palabra. Barthes usa ambos conceptos para mostrar que el amante es el anti-analista: todo le importa, nada puede ignorar.</p>
         </article>
       </div>
       <div class="download-container">
@@ -944,6 +1095,28 @@ function renderFinalState() {
   document.documentElement.style.backgroundColor = "#ffffff";
   document.body.style.backgroundColor = "#ffffff";
   window.scrollTo(0, 0);
+
+  const referencesSection = document.querySelector(".references-section");
+  if (referencesSection) {
+    initReferencesRipple(referencesSection);
+
+    gsap.set(referencesSection, {
+      "--refs-blend-opacity": 0,
+      "--refs-blend-shift": "-36px"
+    });
+
+    gsap.to(referencesSection, {
+      "--refs-blend-opacity": 1,
+      "--refs-blend-shift": "0px",
+      ease: "none",
+      scrollTrigger: {
+        trigger: referencesSection,
+        start: "top bottom",
+        end: "top 45%",
+        scrub: true
+      }
+    });
+  }
 
   const refEntries = document.querySelectorAll(".ref-entry");
 
