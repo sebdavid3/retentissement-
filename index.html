@@ -42,15 +42,17 @@
             <video
               id="video-soprano"
               class="embedded-video"
-              src="/assets/soprano.mp4"
               muted
               loop
               playsinline
-              preload="auto"
+              preload="none"
               disablepictureinpicture
               controlslist="nodownload noplaybackrate noremoteplayback"
               aria-label="Visual de resonancia soprano"
-            ></video>
+            >
+              <source src="/assets/soprano.webm" type="video/webm">
+              <source src="/assets/soprano.mp4" type="video/mp4">
+            </video>
           </div>
 
           <div class="phrase-stack">
@@ -73,7 +75,7 @@
               muted
               loop
               playsinline
-              preload="auto"
+              preload="none"
               disablepictureinpicture
               controlslist="nodownload noplaybackrate noremoteplayback"
               aria-label="Visual del colapso del puente"
@@ -100,7 +102,7 @@
               muted
               loop
               playsinline
-              preload="auto"
+              preload="none"
               disablepictureinpicture
               controlslist="nodownload noplaybackrate noremoteplayback"
               aria-label="Visual de resonancia de cuerda"

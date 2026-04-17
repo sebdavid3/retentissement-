@@ -54,10 +54,9 @@ const entryButton = document.getElementById("entry-button");
 
 const closureAudio = new Audio("/audio/act4.mp3");
 closureAudio.loop = true;
-closureAudio.preload = "auto";
+closureAudio.preload = "none";
 closureAudio.volume = 0;
 closureAudio.muted = true;
-closureAudio.load();
 
 let annihilated = false;
 let audioUnlocked = false;
@@ -121,9 +120,8 @@ const videoByAct = {
 const actStates = actSections.map((section) => {
   const audio = new Audio(section.dataset.audio);
   audio.loop = true;
-  audio.preload = "auto";
+  audio.preload = "none";
   audio.volume = 0;
-  audio.load();
 
   return {
     section,
